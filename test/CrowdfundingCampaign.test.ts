@@ -1,0 +1,350 @@
+import { expect } from "chai";
+import { network } from "hardhat";
+
+const connection = await network.create();
+const { ethers, networkHelpers } = connection;
+
+describe("CrowdfundingCampaign", function () {
+  let deployer: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let author: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let supporter: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let beneficiary: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let outsider: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let registry: any;
+  let token: any;
+  let campaign: any;
+
+  async function deployCampaign(duration = 30n) {
+    registry = await ethers.deployContract("AuthorRegistry");
+    await registry.registerAuthor(author.address, "Alice");
+    token = await ethers.deployContract("RewardToken");
+
+    const campaignFactory = await ethers.getContractFactory("CrowdfundingCampaign");
+    campaign = await campaignFactory.connect(author).deploy(
+      await registry.getAddress(),
+      await token.getAddress(),
+      "Launch Campaign",
+      ethers.parseEther("10"),
+      duration,
+      beneficiary.address,
+    );
+
+    await token.grantRole(await token.MINTER_ROLE(), await campaign.getAddress());
+    return { registry, token, campaign };
+  }
+
+  beforeEach(async function () {
+    [deployer, author, supporter, beneficiary, outsider] = await ethers.getSigners();
+    await deployCampaign();
+  });
+
+  it("01 should revert when registry is zero", async function () {
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+
+    await expect(
+      factory.connect(author).deploy(
+        ethers.ZeroAddress,
+        await token.getAddress(),
+        "Bad",
+        ethers.parseEther("10"),
+        30n,
+        beneficiary.address,
+      ),
+    ).to.revert(ethers);
+  });
+
+  it("02 should revert when token is zero", async function () {
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+
+    await expect(
+      factory.connect(author).deploy(
+        await registry.getAddress(),
+        ethers.ZeroAddress,
+        "Bad",
+        ethers.parseEther("10"),
+        30n,
+        beneficiary.address,
+      ),
+    ).to.revert(ethers);
+  });
+
+  it("03 should revert when beneficiary is zero", async function () {
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+
+    await expect(
+      factory.connect(author).deploy(
+        await registry.getAddress(),
+        await token.getAddress(),
+        "Bad",
+        ethers.parseEther("10"),
+        30n,
+        ethers.ZeroAddress,
+      ),
+    ).to.revert(ethers);
+  });
+
+  it("04 should revert when campaign goal is zero", async function () {
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+
+    await expect(
+      factory.connect(author).deploy(
+        await registry.getAddress(),
+        await token.getAddress(),
+        "Bad",
+        0n,
+        30n,
+        beneficiary.address,
+      ),
+    ).to.revert(ethers);
+  });
+
+  it("05 should revert for non-author campaign creation", async function () {
+    const noAuthorRegistry = await ethers.deployContract("AuthorRegistry");
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+
+    await expect(
+      factory.connect(author).deploy(
+        await noAuthorRegistry.getAddress(),
+        await token.getAddress(),
+        "Bad",
+        ethers.parseEther("10"),
+        30n,
+        beneficiary.address,
+      ),
+    ).to.revert(ethers);
+  });
+
+  it("06 should deploy a valid campaign and expose configuration", async function () {
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+    const campaign2 = await factory.connect(author).deploy(
+      await registry.getAddress(),
+      await token.getAddress(),
+      "Campaign Two",
+      ethers.parseEther("12"),
+      45n,
+      beneficiary.address,
+    );
+
+    await token.grantRole(await token.MINTER_ROLE(), await campaign2.getAddress());
+
+    expect(await campaign2.title()).to.equal("Campaign Two");
+    expect(await campaign2.goal()).to.equal(ethers.parseEther("12"));
+    expect(await campaign2.deadline()).to.be.greaterThan(0n);
+    expect(await campaign2.beneficiary()).to.equal(beneficiary.address);
+  });
+
+  it("07 should accept a contribution before the deadline", async function () {
+    await expect(campaign.connect(supporter).contribute({ value: ethers.parseEther("3") }))
+      .to.emit(campaign, "ContributionReceived")
+      .withArgs(supporter.address, ethers.parseEther("3"));
+
+    expect(await campaign.totalRaised()).to.equal(ethers.parseEther("3"));
+    expect(await campaign.contributions(supporter.address)).to.equal(ethers.parseEther("3"));
+  });
+
+  it("08 should reject zero contribution", async function () {
+    await expect(campaign.connect(supporter).contribute({ value: 0n })).to.be.revertedWithCustomError(
+      campaign,
+      "InvalidAmount",
+    );
+  });
+
+  it("09 should reject contributions after deadline", async function () {
+    const deadline = await campaign.deadline();
+    await networkHelpers.time.increaseTo(deadline + 1n);
+
+    await expect(campaign.connect(supporter).contribute({ value: ethers.parseEther("1") })).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignClosed",
+    );
+  });
+
+  it("10 should reject contributions after campaign is finalized", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+    await campaign.connect(beneficiary).withdrawFunds();
+
+    await expect(campaign.connect(supporter).contribute({ value: ethers.parseEther("1") })).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignClosed",
+    );
+  });
+
+  it("11 should reject withdrawal from unauthorized caller", async function () {
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+    await expect(campaign.connect(outsider).withdrawFunds()).to.be.revertedWithCustomError(campaign, "Unauthorized");
+  });
+
+  it("12 should reject withdraw before deadline", async function () {
+    await expect(campaign.connect(beneficiary).withdrawFunds()).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignStillOpen",
+    );
+  });
+
+  it("13 should reject withdraw after deadline if goal not reached", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(beneficiary).withdrawFunds()).to.be.revertedWithCustomError(
+      campaign,
+      "GoalNotReached",
+    );
+  });
+
+  it("14 should allow beneficiary to withdraw after goal is reached and emit event", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(beneficiary).withdrawFunds())
+      .to.emit(campaign, "BeneficiaryWithdrawn")
+      .withArgs(beneficiary.address, ethers.parseEther("10"));
+
+    expect(await campaign.finalized()).to.equal(true);
+    expect(await ethers.provider.getBalance(await campaign.getAddress())).to.equal(0n);
+  });
+
+  it("15 should reject double withdrawal after finalization", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+    await campaign.connect(beneficiary).withdrawFunds();
+
+    await expect(campaign.connect(beneficiary).withdrawFunds()).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignClosed",
+    );
+  });
+
+  it("16 should reject refund before deadline", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
+    await expect(campaign.connect(supporter).claimRefund()).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignStillOpen",
+    );
+  });
+
+  it("17 should reject refund when goal was reached", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(supporter).claimRefund()).to.be.revertedWithCustomError(
+      campaign,
+      "GoalReached",
+    );
+  });
+
+  it("18 should reject refund for zero contribution", async function () {
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(outsider).claimRefund()).to.be.revertedWithCustomError(
+      campaign,
+      "NoContribution",
+    );
+  });
+
+  it("19 should refund failed campaign contributor and zero contribution record", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    const beforeBalance = await ethers.provider.getBalance(supporter.address);
+    const tx = await campaign.connect(supporter).claimRefund();
+    const receipt = await tx.wait();
+    const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+    await expect(tx).to.emit(campaign, "RefundIssued").withArgs(supporter.address, ethers.parseEther("3"));
+    expect(await campaign.contributions(supporter.address)).to.equal(0n);
+    expect(await ethers.provider.getBalance(await campaign.getAddress())).to.equal(0n);
+
+    const afterBalance = await ethers.provider.getBalance(supporter.address);
+    expect(afterBalance).to.be.greaterThan(beforeBalance - gasUsed);
+  });
+
+  it("20 should reject repeated refunds", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+    await campaign.connect(supporter).claimRefund();
+
+    await expect(campaign.connect(supporter).claimRefund()).to.be.revertedWithCustomError(
+      campaign,
+      "AlreadyRefunded",
+    );
+  });
+
+  it("21 should reject reward claim before deadline", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
+    await expect(campaign.connect(supporter).claimReward()).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignStillOpen",
+    );
+  });
+
+  it("22 should reject reward claim when goal not reached", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(supporter).claimReward()).to.be.revertedWithCustomError(
+      campaign,
+      "GoalNotReached",
+    );
+  });
+
+  it("23 should reject reward claim when the campaign missed its goal", async function () {
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(outsider).claimReward()).to.be.revertedWithCustomError(campaign, "GoalNotReached");
+  });
+
+  it("24 should allow reward claim after goal reached and mint reward tokens", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(supporter).claimReward())
+      .to.emit(campaign, "RewardClaimed")
+      .withArgs(supporter.address, 100n);
+
+    expect(await token.balanceOf(supporter.address)).to.equal(100n);
+  });
+
+  it("25 should reject repeated reward claims", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+    await campaign.connect(supporter).claimReward();
+
+    await expect(campaign.connect(supporter).claimReward()).to.be.revertedWithCustomError(
+      campaign,
+      "AlreadyClaimed",
+    );
+  });
+
+  it("26 should return isSuccessful false before deadline or under target", async function () {
+    expect(await campaign.isSuccessful()).to.equal(false);
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
+    expect(await campaign.isSuccessful()).to.equal(false);
+  });
+
+  it("27 should return isSuccessful true after deadline once goal is met", async function () {
+    await campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    expect(await campaign.isSuccessful()).to.equal(true);
+  });
+
+  it("28 should allow final contribution at exact last second before deadline", async function () {
+    const deadline = await campaign.deadline();
+    await networkHelpers.time.setNextBlockTimestamp(deadline - 1n);
+
+    await expect(campaign.connect(supporter).contribute({ value: ethers.parseEther("1") }))
+      .to.emit(campaign, "ContributionReceived")
+      .withArgs(supporter.address, ethers.parseEther("1"));
+  });
+
+  it("29 should reject contribution at first second after deadline", async function () {
+    const deadline = await campaign.deadline();
+    await networkHelpers.time.increaseTo(deadline + 1n);
+
+    await expect(campaign.connect(supporter).contribute({ value: ethers.parseEther("1") })).to.be.revertedWithCustomError(
+      campaign,
+      "CampaignClosed",
+    );
+  });
+});

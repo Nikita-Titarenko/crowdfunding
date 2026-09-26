@@ -80,7 +80,6 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     function contribute() external payable nonReentrant {
         if (block.timestamp >= deadline) revert CampaignClosed();
         if (msg.value == 0) revert InvalidAmount();
-        if (finalized) revert CampaignClosed();
 
         contributions[msg.sender] += msg.value;
         totalRaised += msg.value;

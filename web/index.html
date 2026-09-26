@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crowdfunding demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Web3 demo</p>
+          <h1>Crowdfunding scenario</h1>
+        </div>
+        <button id="connectWalletBtn" class="primary-btn">Connect MetaMask</button>
+      </header>
+
+      <section class="status-grid">
+        <div class="stat-card">
+          <span class="label">Wallet</span>
+          <strong id="accountStatus">Not connected</strong>
+        </div>
+        <div class="stat-card">
+          <span class="label">Network</span>
+          <strong id="networkStatus">Waiting…</strong>
+        </div>
+        <div class="stat-card">
+          <span class="label">Registry</span>
+          <strong id="registryName">Not deployed</strong>
+        </div>
+        <div class="stat-card">
+          <span class="label">Token</span>
+          <strong id="tokenName">Not deployed</strong>
+        </div>
+        <div class="stat-card">
+          <span class="label">Campaign</span>
+          <strong id="campaignTitle">Not deployed</strong>
+        </div>
+      </section>
+
+      <main class="layout">
+        <section class="panel">
+          <h2>Scenario</h2>
+          <div class="actions">
+            <button id="deployBtn" class="primary-btn">Deploy demo</button>
+            <button id="registerAuthorBtn" class="secondary-btn">Register author</button>
+            <button id="contributeBtn" class="secondary-btn">Contribute 0.5 ETH</button>
+            <button id="withdrawBtn" class="secondary-btn">Withdraw funds</button>
+            <button id="claimRefundBtn" class="secondary-btn">Claim refund</button>
+            <button id="claimRewardBtn" class="secondary-btn">Claim reward</button>
+          </div>
+          <div id="deployStatus" class="message neutral">No scenario deployed yet.</div>
+        </section>
+
+        <section class="panel">
+          <h2>Contract state</h2>
+          <dl class="details-list">
+            <div><dt>Author registered</dt><dd id="authorRegistered">—</dd></div>
+            <div><dt>Goal</dt><dd id="goalValue">—</dd></div>
+            <div><dt>Raised</dt><dd id="raisedValue">—</dd></div>
+            <div><dt>Deadline</dt><dd id="deadlineValue">—</dd></div>
+            <div><dt>Finalized</dt><dd id="finalizedValue">—</dd></div>
+            <div><dt>Successful</dt><dd id="successfulValue">—</dd></div>
+            <div><dt>Reward balance</dt><dd id="rewardBalance">—</dd></div>
+            <div><dt>Contribution</dt><dd id="userContribution">—</dd></div>
+          </dl>
+        </section>
+      </main>
+
+      <section class="panel">
+        <h2>Transactions</h2>
+        <div id="txList" class="tx-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Events</h2>
+        <div id="eventLog" class="event-log"></div>
+      </section>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

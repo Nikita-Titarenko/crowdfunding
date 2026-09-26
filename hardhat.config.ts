@@ -3,6 +3,9 @@ import { configVariable, defineConfig } from "hardhat/config";
 
 export default defineConfig({
   plugins: [hardhatToolboxMochaEthersPlugin],
+  coverage: {
+    skipFiles: ["contracts/experiments/*.sol"],
+  },
   solidity: {
     profiles: {
       default: {
