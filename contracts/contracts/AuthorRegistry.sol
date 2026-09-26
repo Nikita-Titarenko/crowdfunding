@@ -7,12 +7,7 @@ import {IAuthorRegistry} from "../interfaces/IAuthorRegistry.sol";
 contract AuthorRegistry is IAuthorRegistry, AccessControl {
     bytes32 public constant AUTHOR_MANAGER_ROLE = keccak256("AUTHOR_MANAGER_ROLE");
 
-    struct Author {
-        string name;
-        bool isActive;
-    }
-
-    mapping(address => Author) private _authors;
+    mapping(address => string) private _authorNames;
     address[] private _authorList;
 
     error ZeroAddress();
@@ -39,9 +34,9 @@ contract AuthorRegistry is IAuthorRegistry, AccessControl {
     {
         if (author == address(0)) revert ZeroAddress();
         if (bytes(name).length == 0) revert EmptyName();
-        if (_authors[author].isActive) revert AlreadyRegistered();
+        if (bytes(_authorNames[author]).length != 0) revert AlreadyRegistered();
 
-        _authors[author] = Author({name: name, isActive: true});
+        _authorNames[author] = name;
         _authorList.push(author);
 
         emit AuthorRegistered(author, name);
@@ -52,10 +47,10 @@ contract AuthorRegistry is IAuthorRegistry, AccessControl {
     /// @param author The author address to remove.
     function removeAuthor(address author) external override onlyRole(AUTHOR_MANAGER_ROLE) {
         if (author == address(0)) revert ZeroAddress();
-        if (!_authors[author].isActive) revert NotRegistered();
+        string memory name = _authorNames[author];
+        if (bytes(name).length == 0) revert NotRegistered();
 
-        string memory name = _authors[author].name;
-        delete _authors[author];
+        delete _authorNames[author];
 
         emit AuthorRemoved(author, name);
     }
@@ -64,7 +59,7 @@ contract AuthorRegistry is IAuthorRegistry, AccessControl {
     /// @param account The address to check.
     /// @return True if the address is active as an author.
     function isAuthor(address account) external view override returns (bool) {
-        return _authors[account].isActive;
+        return bytes(_authorNames[account]).length != 0;
     }
 
     /// @notice Returns the metadata for an author.
@@ -72,8 +67,8 @@ contract AuthorRegistry is IAuthorRegistry, AccessControl {
     /// @return name The author name.
     /// @return isActive Whether the author is active.
     function getAuthor(address account) external view returns (string memory name, bool isActive) {
-        Author storage author = _authors[account];
-        return (author.name, author.isActive);
+        name = _authorNames[account];
+        return (name, bytes(name).length != 0);
     }
 
     /// @notice Returns all registered authors.

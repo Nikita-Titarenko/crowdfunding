@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { network } from "hardhat";
+import { deployAndTrack, trackGasUsage } from "./gas-report.js";
 
 const connection = await network.create();
 const { ethers } = connection;
@@ -12,7 +13,7 @@ describe("RewardToken", function () {
 
   beforeEach(async function () {
     [deployer, recipient, outsider] = await ethers.getSigners();
-    token = await ethers.deployContract("RewardToken");
+    token = await deployAndTrack("RewardToken", ethers.deployContract("RewardToken"));
   });
 
   it("01 should grant deployer as admin and minter", async function () {
@@ -21,9 +22,12 @@ describe("RewardToken", function () {
   });
 
   it("02 should mint tokens to a valid recipient", async function () {
-    await expect(token.mint(recipient.address, 1000n))
+    const mintTx = token.mint(recipient.address, 1000n);
+
+    await expect(mintTx)
       .to.emit(token, "RewardMinted")
       .withArgs(recipient.address, 1000n, deployer.address);
+    await trackGasUsage("RewardToken", "mint", mintTx);
 
     expect(await token.balanceOf(recipient.address)).to.equal(1000n);
   });
@@ -37,7 +41,10 @@ describe("RewardToken", function () {
   });
 
   it("05 should pause and emit pause event", async function () {
-    await expect(token.pause()).to.emit(token, "Paused");
+    const pauseTx = token.pause();
+
+    await expect(pauseTx).to.emit(token, "Paused");
+    await trackGasUsage("RewardToken", "pause", pauseTx);
     expect(await token.paused()).to.equal(true);
   });
 
@@ -46,8 +53,13 @@ describe("RewardToken", function () {
   });
 
   it("07 should unpause and emit unpause event", async function () {
-    await token.pause();
-    await expect(token.unpause()).to.emit(token, "Unpaused");
+    const pauseTx = token.pause();
+    await pauseTx;
+    await trackGasUsage("RewardToken", "pause", pauseTx);
+
+    const unpauseTx = token.unpause();
+    await expect(unpauseTx).to.emit(token, "Unpaused");
+    await trackGasUsage("RewardToken", "unpause", unpauseTx);
     expect(await token.paused()).to.equal(false);
   });
 
@@ -57,27 +69,65 @@ describe("RewardToken", function () {
   });
 
   it("09 should block transfers while paused", async function () {
-    await token.mint(deployer.address, 1000n);
-    await token.pause();
+    const mintTx = token.mint(deployer.address, 1000n);
+    await mintTx;
+    await trackGasUsage("RewardToken", "mint", mintTx);
+
+    const pauseTx = token.pause();
+    await pauseTx;
+    await trackGasUsage("RewardToken", "pause", pauseTx);
 
     await expect(token.transfer(recipient.address, 100n)).to.revert(ethers);
   });
 
   it("10 should allow transfers after unpause", async function () {
-    await token.mint(deployer.address, 1000n);
-    await token.pause();
-    await token.unpause();
+    const mintTx = token.mint(deployer.address, 1000n);
+    await mintTx;
+    await trackGasUsage("RewardToken", "mint", mintTx);
 
-    await token.transfer(recipient.address, 100n);
+    const pauseTx = token.pause();
+    await pauseTx;
+    await trackGasUsage("RewardToken", "pause", pauseTx);
+
+    const unpauseTx = token.unpause();
+    await unpauseTx;
+    await trackGasUsage("RewardToken", "unpause", unpauseTx);
+
+    const transferTx = token.transfer(recipient.address, 100n);
+    await transferTx;
+    await trackGasUsage("RewardToken", "transfer", transferTx);
     expect(await token.balanceOf(recipient.address)).to.equal(100n);
   });
 
   it("11 should allow grantRole and mint through new minter", async function () {
     const minterRole = await token.MINTER_ROLE();
-    await token.grantRole(minterRole, recipient.address);
+    const grantRoleTx = token.grantRole(minterRole, recipient.address);
+    await grantRoleTx;
+    await trackGasUsage("RewardToken", "grantRole", grantRoleTx);
 
-    await expect(token.connect(recipient).mint(outsider.address, 333n))
+    const mintTx = token.connect(recipient).mint(outsider.address, 333n);
+
+    await expect(mintTx)
       .to.emit(token, "RewardMinted")
       .withArgs(outsider.address, 333n, recipient.address);
+    await trackGasUsage("RewardToken", "mint", mintTx);
+  });
+
+  it("12 should mint multiple times to several recipients", async function () {
+    const mintTx1 = token.mint(recipient.address, 100n);
+    const mintTx2 = token.mint(outsider.address, 250n);
+    const mintTx3 = token.mint(deployer.address, 75n);
+
+    await mintTx1;
+    await mintTx2;
+    await mintTx3;
+
+    await trackGasUsage("RewardToken", "mint", mintTx1);
+    await trackGasUsage("RewardToken", "mint", mintTx2);
+    await trackGasUsage("RewardToken", "mint", mintTx3);
+
+    expect(await token.balanceOf(recipient.address)).to.equal(100n);
+    expect(await token.balanceOf(outsider.address)).to.equal(250n);
+    expect(await token.balanceOf(deployer.address)).to.equal(75n);
   });
 });

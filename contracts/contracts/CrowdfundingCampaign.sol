@@ -77,7 +77,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
 
     /// @notice Contributes ETH to the campaign before the deadline.
     /// @dev Each contribution increases the total collected amount and tracks the investor balance.
-    function contribute() external payable nonReentrant {
+    function contribute() external payable {
         if (block.timestamp >= deadline) revert CampaignClosed();
         if (msg.value == 0) revert InvalidAmount();
 
@@ -89,7 +89,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
 
     /// @notice Allows the beneficiary to withdraw funds after the deadline when the goal is reached.
     /// @dev The campaign cannot withdraw before deadline or if the target is not met.
-    function withdrawFunds() external nonReentrant {
+    function withdrawFunds() external {
         if (msg.sender != beneficiary) revert Unauthorized();
         if (block.timestamp < deadline) revert CampaignStillOpen();
         if (totalRaised < goal) revert GoalNotReached();
@@ -106,7 +106,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
 
     /// @notice Claims a refund when the campaign ends without reaching its goal.
     /// @dev Refund can be claimed only once per contributor.
-    function claimRefund() external nonReentrant {
+    function claimRefund() external {
         if (block.timestamp < deadline) revert CampaignStillOpen();
         if (totalRaised >= goal) revert GoalReached();
         if (refundClaimed[msg.sender]) revert AlreadyRefunded();
@@ -125,7 +125,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
 
     /// @notice Claims the reward token for a successful campaign.
     /// @dev Rewards are distributed proportionally to the supporter contribution.
-    function claimReward() external nonReentrant {
+    function claimReward() external {
         if (block.timestamp < deadline) revert CampaignStillOpen();
         if (totalRaised < goal) revert GoalNotReached();
         if (rewardClaimed[msg.sender]) revert AlreadyClaimed();
