@@ -40,6 +40,15 @@ contract RewardToken is IRewardToken, ERC20, ERC20Pausable, AccessControl {
         _unpause();
     }
 
+    function hasRole(bytes32 role, address account)
+        public
+        view
+        override(IRewardToken, AccessControl)
+        returns (bool)
+    {
+        return super.hasRole(role, account);
+    }
+
     function _update(address from, address to, uint256 value)
         internal
         override(ERC20, ERC20Pausable)

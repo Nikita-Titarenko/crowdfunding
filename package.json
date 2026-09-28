@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "npx hardhat build --build-profile production",
+    "deploy:sepolia": "npx hardhat run --build-profile production --network sepolia scripts/deploy-sepolia.ts",
     "test": "npx hardhat test",
+    "verify:campaign": "npx hardhat run --build-profile production --network sepolia scripts/verify-campaign.ts",
     "start:web": "node ./web/server.js"
   },
   "keywords": [],

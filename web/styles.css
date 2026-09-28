@@ -3,7 +3,7 @@
   --panel: #111c2d;
   --panel-alt: #162742;
   --accent: #5eead4;
-  --accent-2: #7c3aed;
+  --accent-2: #f97316;
   --text: #e5eefb;
   --muted: #9fb3ca;
   --success: #34d399;
@@ -16,9 +16,25 @@
 
 body {
   margin: 0;
-  font-family: Inter, Segoe UI, sans-serif;
-  background: linear-gradient(180deg, #070d17 0%, #0f172a 100%);
+  font-family: "Bahnschrift", "Trebuchet MS", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(94, 234, 212, 0.18), transparent 28%),
+    radial-gradient(circle at right, rgba(249, 115, 22, 0.12), transparent 24%),
+    linear-gradient(180deg, #070d17 0%, #0f172a 100%);
   color: var(--text);
+}
+
+input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+  background: rgba(6, 14, 25, 0.85);
+  color: var(--text);
+}
+
+input::placeholder {
+  color: rgba(159, 179, 202, 0.7);
 }
 
 button {
@@ -31,7 +47,7 @@ button {
 }
 
 button:hover { transform: translateY(-1px); }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:disabled { opacity: 0.5; cursor: default; }
 
 .primary-btn {
   background: linear-gradient(135deg, var(--accent), #3b82f6);
@@ -107,6 +123,77 @@ h1, h2, p { margin: 0; }
   margin: 1rem 0;
 }
 
+.action-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.tab-btn {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--accent), #3b82f6);
+  color: #08131f;
+}
+
+.tab-panels {
+  margin: 1rem 0;
+}
+
+.tab-panel {
+  display: none;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  background: rgba(9, 16, 29, 0.45);
+}
+
+.tab-panel.active {
+  display: grid;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  margin: 1rem 0;
+  align-items: start;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  align-self: start;
+}
+
+.helper-text {
+  min-height: 1.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.single-column {
+  grid-template-columns: 1fr;
+}
+
+.form-grid span,
+.panel-copy {
+  color: var(--muted);
+}
+
+.panel-copy {
+  margin-top: 0.4rem;
+}
+
 .message {
   border-radius: 10px;
   padding: 0.9rem 1rem;
@@ -135,6 +222,48 @@ h1, h2, p { margin: 0; }
 
 .details-list dt { color: var(--muted); }
 .details-list dd { margin: 0; font-weight: 600; }
+
+.value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.copy-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text);
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.copy-btn:hover {
+  background: rgba(94, 234, 212, 0.12);
+  transform: translateY(-1px);
+}
+
+.copy-btn.copied {
+  background: rgba(52, 211, 153, 0.18);
+  color: var(--success);
+}
+
+.copyable-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
 
 .tx-list, .event-log {
   display: grid;
@@ -170,4 +299,5 @@ h1, h2, p { margin: 0; }
 @media (max-width: 700px) {
   .layout { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; align-items: flex-start; }
+  .action-tabs { flex-direction: column; }
 }

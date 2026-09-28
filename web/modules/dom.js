@@ -1,0 +1,51 @@
+export const elements = {
+  connectWalletBtn: document.getElementById("connectWalletBtn"),
+  accountStatus: document.getElementById("accountStatus"),
+  networkStatus: document.getElementById("networkStatus"),
+  registryName: document.getElementById("registryName"),
+  tokenName: document.getElementById("tokenName"),
+  campaignTitle: document.getElementById("campaignTitle"),
+  deployStatus: document.getElementById("deployStatus"),
+  actionTabs: document.getElementById("actionTabs"),
+  tabButtons: Array.from(document.querySelectorAll("[data-tab]")),
+  tabPanels: Array.from(document.querySelectorAll("[data-panel]")),
+  authorNameInput: document.getElementById("authorNameInput"),
+  authorAddressInput: document.getElementById("authorAddressInput"),
+  campaignNameInput: document.getElementById("campaignNameInput"),
+  campaignGoalInput: document.getElementById("campaignGoalInput"),
+  goalEthEstimate: document.getElementById("goalEthEstimate"),
+  campaignDurationInput: document.getElementById("campaignDurationInput"),
+  beneficiaryInput: document.getElementById("beneficiaryInput"),
+  campaignAddressInput: document.getElementById("campaignAddressInput"),
+  contributionInput: document.getElementById("contributionInput"),
+  contributionEthEstimate: document.getElementById("contributionEthEstimate"),
+  authorRegistered: document.getElementById("authorRegistered"),
+  registryManagerValue: document.getElementById("registryManagerValue"),
+  tokenAdminValue: document.getElementById("tokenAdminValue"),
+  campaignMinterValue: document.getElementById("campaignMinterValue"),
+  campaignAddressValue: document.getElementById("campaignAddressValue"),
+  goalValue: document.getElementById("goalValue"),
+  raisedValue: document.getElementById("raisedValue"),
+  deadlineValue: document.getElementById("deadlineValue"),
+  finalizedValue: document.getElementById("finalizedValue"),
+  successfulValue: document.getElementById("successfulValue"),
+  rewardBalance: document.getElementById("rewardBalance"),
+  userContribution: document.getElementById("userContribution"),
+  txList: document.getElementById("txList"),
+  eventLog: document.getElementById("eventLog"),
+  createCampaignBtn: document.getElementById("createCampaignBtn"),
+  loadCampaignBtn: document.getElementById("loadCampaignBtn"),
+  registerAuthorBtn: document.getElementById("registerAuthorBtn"),
+  grantMinterRoleBtn: document.getElementById("grantMinterRoleBtn"),
+  contributeBtn: document.getElementById("contributeBtn"),
+  withdrawBtn: document.getElementById("withdrawBtn"),
+  claimRefundBtn: document.getElementById("claimRefundBtn"),
+  claimRewardBtn: document.getElementById("claimRewardBtn"),
+};
+
+export function bindButton(id, action) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.addEventListener("click", action);
+  }
+}

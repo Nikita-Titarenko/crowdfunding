@@ -3,18 +3,21 @@ pragma solidity ^0.8.34;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IAuthorRegistry} from "../interfaces/IAuthorRegistry.sol";
+import {IPriceFeed} from "../interfaces/IPriceFeed.sol";
 import {IRewardToken} from "../interfaces/IRewardToken.sol";
 
 contract CrowdfundingCampaign is ReentrancyGuard {
     uint256 public constant REWARD_MULTIPLIER = 10;
+    uint256 private constant USD_SCALE = 1e18;
 
     IAuthorRegistry public immutable authorRegistry;
+    IPriceFeed public immutable priceFeed;
     IRewardToken public immutable rewardToken;
 
     address public immutable author;
     address public immutable beneficiary;
     string public title;
-    uint256 public immutable goal;
+    uint256 public immutable goalUsd;
     uint256 public immutable deadline;
     uint256 public totalRaised;
     bool public finalized;
@@ -26,6 +29,9 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     error ZeroAddress();
     error NotAuthor();
     error InvalidGoal();
+    error InvalidOraclePrice();
+    error InvalidPriceFeedDecimals();
+    error StaleOraclePrice();
     error CampaignClosed();
     error CampaignStillOpen();
     error GoalNotReached();
@@ -34,6 +40,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     error NoContribution();
     error AlreadyClaimed();
     error AlreadyRefunded();
+    error MissingMinterRole();
     error TransferFailed();
     error Unauthorized();
 
@@ -41,8 +48,9 @@ contract CrowdfundingCampaign is ReentrancyGuard {
         address indexed authorAddress,
         address indexed registry,
         address indexed token,
+        address priceFeed,
         string title,
-        uint256 goal,
+        uint256 goalUsd,
         uint256 deadline
     );
     event ContributionReceived(address indexed supporter, uint256 amount);
@@ -53,26 +61,33 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     constructor(
         address registry,
         address token,
+        address ethUsdPriceFeed,
         string memory campaignTitle,
-        uint256 campaignGoal,
+        uint256 campaignGoalUsd,
         uint256 duration,
         address campaignBeneficiary
     ) {
-        if (registry == address(0) || token == address(0) || campaignBeneficiary == address(0)) {
+        if (
+            registry == address(0) || token == address(0) || ethUsdPriceFeed == address(0) || campaignBeneficiary == address(0)
+        ) {
             revert ZeroAddress();
         }
-        if (campaignGoal == 0) revert InvalidGoal();
+        if (campaignGoalUsd == 0) revert InvalidGoal();
         if (!IAuthorRegistry(registry).isAuthor(msg.sender)) revert NotAuthor();
 
+        uint8 feedDecimals = IPriceFeed(ethUsdPriceFeed).decimals();
+        if (feedDecimals > 18) revert InvalidPriceFeedDecimals();
+
         authorRegistry = IAuthorRegistry(registry);
+        priceFeed = IPriceFeed(ethUsdPriceFeed);
         rewardToken = IRewardToken(token);
         author = msg.sender;
         beneficiary = campaignBeneficiary;
         title = campaignTitle;
-        goal = campaignGoal;
+        goalUsd = campaignGoalUsd;
         deadline = block.timestamp + duration;
 
-        emit CampaignCreated(msg.sender, registry, token, campaignTitle, campaignGoal, deadline);
+        emit CampaignCreated(msg.sender, registry, token, ethUsdPriceFeed, campaignTitle, campaignGoalUsd, deadline);
     }
 
     /// @notice Contributes ETH to the campaign before the deadline.
@@ -92,7 +107,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     function withdrawFunds() external {
         if (msg.sender != beneficiary) revert Unauthorized();
         if (block.timestamp < deadline) revert CampaignStillOpen();
-        if (totalRaised < goal) revert GoalNotReached();
+        if (!_hasReachedGoal()) revert GoalNotReached();
         if (finalized) revert CampaignClosed();
 
         finalized = true;
@@ -108,7 +123,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     /// @dev Refund can be claimed only once per contributor.
     function claimRefund() external {
         if (block.timestamp < deadline) revert CampaignStillOpen();
-        if (totalRaised >= goal) revert GoalReached();
+        if (_hasReachedGoal()) revert GoalReached();
         if (refundClaimed[msg.sender]) revert AlreadyRefunded();
 
         uint256 amount = contributions[msg.sender];
@@ -127,15 +142,16 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     /// @dev Rewards are distributed proportionally to the supporter contribution.
     function claimReward() external {
         if (block.timestamp < deadline) revert CampaignStillOpen();
-        if (totalRaised < goal) revert GoalNotReached();
+        if (!_hasReachedGoal()) revert GoalNotReached();
         if (rewardClaimed[msg.sender]) revert AlreadyClaimed();
 
         uint256 contribution = contributions[msg.sender];
         if (contribution == 0) revert NoContribution();
+        if (!rewardToken.hasRole(rewardToken.MINTER_ROLE(), address(this))) revert MissingMinterRole();
 
         rewardClaimed[msg.sender] = true;
 
-        uint256 rewardAmount = contribution * REWARD_MULTIPLIER / 1 ether;
+        uint256 rewardAmount = (contribution * REWARD_MULTIPLIER * 1e18) / 1 ether;
         if (rewardAmount == 0) rewardAmount = 1;
 
         rewardToken.mint(msg.sender, rewardAmount);
@@ -146,6 +162,31 @@ contract CrowdfundingCampaign is ReentrancyGuard {
     /// @notice Returns the current campaign status.
     /// @return success True if the target was reached before the deadline.
     function isSuccessful() external view returns (bool success) {
-        return block.timestamp >= deadline && totalRaised >= goal;
+        return block.timestamp >= deadline && _hasReachedGoal();
+    }
+
+    function currentEthUsdPrice() public view returns (uint256) {
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = priceFeed.latestRoundData();
+        if (answer <= 0) revert InvalidOraclePrice();
+        if (updatedAt == 0 || answeredInRound < roundId) revert StaleOraclePrice();
+
+        uint8 feedDecimals = priceFeed.decimals();
+        return uint256(answer) * (USD_SCALE / (10 ** feedDecimals));
+    }
+
+    function totalRaisedUsd() public view returns (uint256) {
+        return _convertEthToUsd(totalRaised);
+    }
+
+    function contributionUsd(address supporter) external view returns (uint256) {
+        return _convertEthToUsd(contributions[supporter]);
+    }
+
+    function _hasReachedGoal() internal view returns (bool) {
+        return totalRaisedUsd() >= goalUsd;
+    }
+
+    function _convertEthToUsd(uint256 amountWei) internal view returns (uint256) {
+        return amountWei * currentEthUsdPrice() / 1 ether;
     }
 }

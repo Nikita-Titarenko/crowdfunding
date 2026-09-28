@@ -4,6 +4,9 @@ import { deployAndTrack, trackGasUsage } from "./gas-report.js";
 
 const connection = await network.create();
 const { ethers, networkHelpers } = connection;
+const ETH_USD_PRICE = 2_000n * 10n ** 8n;
+const APPRECIATED_ETH_USD_PRICE = 2_500n * 10n ** 8n;
+const GOAL_USD = ethers.parseUnits("20000", 18);
 
 describe("CrowdfundingCampaign", function () {
   let deployer: Awaited<ReturnType<typeof ethers.getSigners>>[number];
@@ -11,6 +14,7 @@ describe("CrowdfundingCampaign", function () {
   let supporter: Awaited<ReturnType<typeof ethers.getSigners>>[number];
   let beneficiary: Awaited<ReturnType<typeof ethers.getSigners>>[number];
   let outsider: Awaited<ReturnType<typeof ethers.getSigners>>[number];
+  let priceFeed: any;
   let registry: any;
   let token: any;
   let campaign: any;
@@ -21,6 +25,7 @@ describe("CrowdfundingCampaign", function () {
   }
 
   async function deployCampaign(duration = 30n) {
+    priceFeed = await deployAndTrack("MockPriceFeed", ethers.deployContract("MockPriceFeed", [8, ETH_USD_PRICE]));
     registry = await deployAndTrack("AuthorRegistry", ethers.deployContract("AuthorRegistry"));
 
     const registerAuthorTx = registry.registerAuthor(author.address, "Alice");
@@ -34,8 +39,9 @@ describe("CrowdfundingCampaign", function () {
       campaignFactory.connect(author).deploy(
         await registry.getAddress(),
         await token.getAddress(),
+        await priceFeed.getAddress(),
         "Launch Campaign",
-        ethers.parseEther("10"),
+        GOAL_USD,
         duration,
         beneficiary.address,
       ),
@@ -44,7 +50,7 @@ describe("CrowdfundingCampaign", function () {
     const grantRoleTx = token.grantRole(await token.MINTER_ROLE(), await campaign.getAddress());
     await recordTrackedTx("RewardToken", "grantRole", grantRoleTx);
 
-    return { registry, token, campaign };
+    return { priceFeed, registry, token, campaign };
   }
 
   beforeEach(async function () {
@@ -52,58 +58,78 @@ describe("CrowdfundingCampaign", function () {
     await deployCampaign();
   });
 
-  it("01 should revert when registry is zero", async function () {
+  it("reverts when registry is zero", async function () {
     const factory = await ethers.getContractFactory("CrowdfundingCampaign");
 
     await expect(
       factory.connect(author).deploy(
         ethers.ZeroAddress,
         await token.getAddress(),
+        await priceFeed.getAddress(),
         "Bad",
-        ethers.parseEther("10"),
+        GOAL_USD,
         30n,
         beneficiary.address,
       ),
     ).to.revert(ethers);
   });
 
-  it("02 should revert when token is zero", async function () {
+  it("reverts when token is zero", async function () {
     const factory = await ethers.getContractFactory("CrowdfundingCampaign");
 
     await expect(
       factory.connect(author).deploy(
         await registry.getAddress(),
         ethers.ZeroAddress,
+        await priceFeed.getAddress(),
         "Bad",
-        ethers.parseEther("10"),
+        GOAL_USD,
         30n,
         beneficiary.address,
       ),
     ).to.revert(ethers);
   });
 
-  it("03 should revert when beneficiary is zero", async function () {
+  it("reverts when price feed is zero", async function () {
     const factory = await ethers.getContractFactory("CrowdfundingCampaign");
 
     await expect(
       factory.connect(author).deploy(
         await registry.getAddress(),
         await token.getAddress(),
+        ethers.ZeroAddress,
         "Bad",
-        ethers.parseEther("10"),
+        GOAL_USD,
+        30n,
+        beneficiary.address,
+      ),
+    ).to.revert(ethers);
+  });
+
+  it("reverts when beneficiary is zero", async function () {
+    const factory = await ethers.getContractFactory("CrowdfundingCampaign");
+
+    await expect(
+      factory.connect(author).deploy(
+        await registry.getAddress(),
+        await token.getAddress(),
+        await priceFeed.getAddress(),
+        "Bad",
+        GOAL_USD,
         30n,
         ethers.ZeroAddress,
       ),
     ).to.revert(ethers);
   });
 
-  it("04 should revert when campaign goal is zero", async function () {
+  it("reverts when campaign goal is zero", async function () {
     const factory = await ethers.getContractFactory("CrowdfundingCampaign");
 
     await expect(
       factory.connect(author).deploy(
         await registry.getAddress(),
         await token.getAddress(),
+        await priceFeed.getAddress(),
         "Bad",
         0n,
         30n,
@@ -112,7 +138,7 @@ describe("CrowdfundingCampaign", function () {
     ).to.revert(ethers);
   });
 
-  it("05 should revert for non-author campaign creation", async function () {
+  it("reverts for non-author campaign creation", async function () {
     const noAuthorRegistry = await deployAndTrack("AuthorRegistry", ethers.deployContract("AuthorRegistry"));
     const factory = await ethers.getContractFactory("CrowdfundingCampaign");
 
@@ -120,38 +146,41 @@ describe("CrowdfundingCampaign", function () {
       factory.connect(author).deploy(
         await noAuthorRegistry.getAddress(),
         await token.getAddress(),
+        await priceFeed.getAddress(),
         "Bad",
-        ethers.parseEther("10"),
+        GOAL_USD,
         30n,
         beneficiary.address,
       ),
     ).to.revert(ethers);
   });
 
-  it("06 should deploy a valid campaign and expose configuration", async function () {
+  it("deploys a valid campaign and exposes configuration", async function () {
     const factory = await ethers.getContractFactory("CrowdfundingCampaign");
-    const campaign2 = await deployAndTrack(
+    const campaign2: any = await deployAndTrack(
       "CrowdfundingCampaign",
       factory.connect(author).deploy(
         await registry.getAddress(),
         await token.getAddress(),
+        await priceFeed.getAddress(),
         "Campaign Two",
-        ethers.parseEther("12"),
+        ethers.parseUnits("24000", 18),
         45n,
         beneficiary.address,
-      ),
+      ) as Promise<any>,
     );
 
     const grantRoleTx = token.grantRole(await token.MINTER_ROLE(), await campaign2.getAddress());
     await recordTrackedTx("RewardToken", "grantRole", grantRoleTx);
 
     expect(await campaign2.title()).to.equal("Campaign Two");
-    expect(await campaign2.goal()).to.equal(ethers.parseEther("12"));
+    expect(await campaign2.goalUsd()).to.equal(ethers.parseUnits("24000", 18));
     expect(await campaign2.deadline()).to.be.greaterThan(0n);
     expect(await campaign2.beneficiary()).to.equal(beneficiary.address);
+    expect(await campaign2.priceFeed()).to.equal(await priceFeed.getAddress());
   });
 
-  it("07 should accept a contribution before the deadline", async function () {
+  it("accepts a contribution before the deadline", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
 
     await expect(contributeTx)
@@ -161,16 +190,17 @@ describe("CrowdfundingCampaign", function () {
 
     expect(await campaign.totalRaised()).to.equal(ethers.parseEther("3"));
     expect(await campaign.contributions(supporter.address)).to.equal(ethers.parseEther("3"));
+    expect(await campaign.totalRaisedUsd()).to.equal(ethers.parseUnits("6000", 18));
   });
 
-  it("08 should reject zero contribution", async function () {
+  it("rejects zero contribution", async function () {
     await expect(campaign.connect(supporter).contribute({ value: 0n })).to.be.revertedWithCustomError(
       campaign,
       "InvalidAmount",
     );
   });
 
-  it("09 should reject contributions after deadline", async function () {
+  it("rejects contributions after deadline", async function () {
     const deadline = await campaign.deadline();
     await networkHelpers.time.increaseTo(deadline + 1n);
 
@@ -180,7 +210,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("10 should reject contributions after campaign is finalized", async function () {
+  it("rejects contributions after campaign is finalized", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -194,19 +224,19 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("11 should reject withdrawal from unauthorized caller", async function () {
+  it("rejects withdrawal from unauthorized caller", async function () {
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
     await expect(campaign.connect(outsider).withdrawFunds()).to.be.revertedWithCustomError(campaign, "Unauthorized");
   });
 
-  it("12 should reject withdraw before deadline", async function () {
+  it("rejects withdraw before deadline", async function () {
     await expect(campaign.connect(beneficiary).withdrawFunds()).to.be.revertedWithCustomError(
       campaign,
       "CampaignStillOpen",
     );
   });
 
-  it("13 should reject withdraw after deadline if goal not reached", async function () {
+  it("rejects withdraw after deadline if USD goal is not reached", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -217,7 +247,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("14 should allow beneficiary to withdraw after goal is reached and emit event", async function () {
+  it("allows beneficiary to withdraw after USD goal is reached and emit event", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -233,7 +263,7 @@ describe("CrowdfundingCampaign", function () {
     expect(await ethers.provider.getBalance(await campaign.getAddress())).to.equal(0n);
   });
 
-  it("15 should reject double withdrawal after finalization", async function () {
+  it("rejects double withdrawal after finalization", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -247,7 +277,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("16 should reject refund before deadline", async function () {
+  it("rejects refund before deadline", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await expect(campaign.connect(supporter).claimRefund()).to.be.revertedWithCustomError(
@@ -256,7 +286,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("17 should reject refund when goal was reached", async function () {
+  it("rejects refund when USD goal was reached", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -267,7 +297,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("18 should reject refund for zero contribution", async function () {
+  it("rejects refund for zero contribution", async function () {
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
 
     await expect(campaign.connect(outsider).claimRefund()).to.be.revertedWithCustomError(
@@ -276,7 +306,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("19 should refund failed campaign contributor and zero contribution record", async function () {
+  it("refunds failed campaign contributor and zeroes the contribution record", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -295,7 +325,7 @@ describe("CrowdfundingCampaign", function () {
     expect(afterBalance).to.be.greaterThan(beforeBalance - gasCost);
   });
 
-  it("20 should reject repeated refunds", async function () {
+  it("rejects repeated refunds", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -309,7 +339,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("21 should reject reward claim before deadline", async function () {
+  it("rejects reward claim before deadline", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await expect(campaign.connect(supporter).claimReward()).to.be.revertedWithCustomError(
@@ -318,7 +348,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("22 should reject reward claim when goal not reached", async function () {
+  it("rejects reward claim when USD goal is not reached", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -329,13 +359,27 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("23 should reject reward claim when the campaign missed its goal", async function () {
+  it("rejects reward claim when the campaign missed its USD goal", async function () {
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
 
     await expect(campaign.connect(outsider).claimReward()).to.be.revertedWithCustomError(campaign, "GoalNotReached");
   });
 
-  it("24 should allow reward claim after goal reached and mint reward tokens", async function () {
+  it("reverts with a clear custom error when the campaign lacks MINTER_ROLE", async function () {
+    const revokeRoleTx = token.revokeRole(await token.MINTER_ROLE(), await campaign.getAddress());
+    await recordTrackedTx("RewardToken", "revokeRole", revokeRoleTx);
+
+    const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
+    await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    await expect(campaign.connect(supporter).claimReward()).to.be.revertedWithCustomError(
+      campaign,
+      "MissingMinterRole",
+    );
+  });
+
+  it("allows reward claim after USD goal is reached and mints reward tokens", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -350,7 +394,36 @@ describe("CrowdfundingCampaign", function () {
     expect(await token.balanceOf(supporter.address)).to.equal(100n);
   });
 
-  it("25 should reject repeated reward claims", async function () {
+  it("mints proportional fractional rewards for small ETH contributions", async function () {
+    const smallGoal = ethers.parseUnits("1", 18);
+    const campaignFactory = await ethers.getContractFactory("CrowdfundingCampaign");
+    const smallGoalCampaign = await deployAndTrack(
+      "CrowdfundingCampaign",
+      campaignFactory.connect(author).deploy(
+        await registry.getAddress(),
+        await token.getAddress(),
+        await priceFeed.getAddress(),
+        "Small Goal Campaign",
+        smallGoal,
+        30n,
+        beneficiary.address,
+      ),
+    );
+
+    const grantRoleTx = token.grantRole(await token.MINTER_ROLE(), await smallGoalCampaign.getAddress());
+    await recordTrackedTx("RewardToken", "grantRole", grantRoleTx);
+
+    const contributeTx = smallGoalCampaign.connect(supporter).contribute({ value: ethers.parseEther("0.002") });
+    await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
+    await networkHelpers.time.increaseTo((await smallGoalCampaign.deadline()) + 1n);
+
+    const claimRewardTx = smallGoalCampaign.connect(supporter).claimReward();
+    await recordTrackedTx("CrowdfundingCampaign", "claimReward", claimRewardTx);
+
+    expect(await token.balanceOf(supporter.address)).to.equal(ethers.parseUnits("0.02", 18));
+  });
+
+  it("rejects repeated reward claims", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -364,7 +437,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("26 should return isSuccessful false before deadline or under target", async function () {
+  it("returns isSuccessful false before deadline or under USD target", async function () {
     expect(await campaign.isSuccessful()).to.equal(false);
 
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("5") });
@@ -372,7 +445,7 @@ describe("CrowdfundingCampaign", function () {
     expect(await campaign.isSuccessful()).to.equal(false);
   });
 
-  it("27 should return isSuccessful true after deadline once goal is met", async function () {
+  it("returns isSuccessful true after deadline once USD goal is met", async function () {
     const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("10") });
     await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
     await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
@@ -380,7 +453,7 @@ describe("CrowdfundingCampaign", function () {
     expect(await campaign.isSuccessful()).to.equal(true);
   });
 
-  it("28 should allow final contribution at exact last second before deadline", async function () {
+  it("allows final contribution at exact last second before deadline", async function () {
     const deadline = await campaign.deadline();
     await networkHelpers.time.setNextBlockTimestamp(deadline - 1n);
 
@@ -392,7 +465,7 @@ describe("CrowdfundingCampaign", function () {
     await trackGasUsage("CrowdfundingCampaign", "contribute", contributeTx);
   });
 
-  it("29 should reject contribution at first second after deadline", async function () {
+  it("rejects contribution at first second after deadline", async function () {
     const deadline = await campaign.deadline();
     await networkHelpers.time.increaseTo(deadline + 1n);
 
@@ -402,7 +475,7 @@ describe("CrowdfundingCampaign", function () {
     );
   });
 
-  it("30 should accept multiple contributions from different supporters before the deadline", async function () {
+  it("accepts multiple contributions from different supporters before the deadline", async function () {
     const firstContributionTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
     const secondContributionTx = campaign.connect(outsider).contribute({ value: ethers.parseEther("2") });
 
@@ -412,9 +485,10 @@ describe("CrowdfundingCampaign", function () {
     expect(await campaign.totalRaised()).to.equal(ethers.parseEther("5"));
     expect(await campaign.contributions(supporter.address)).to.equal(ethers.parseEther("3"));
     expect(await campaign.contributions(outsider.address)).to.equal(ethers.parseEther("2"));
+    expect(await campaign.totalRaisedUsd()).to.equal(ethers.parseUnits("10000", 18));
   });
 
-  it("31 should allow multiple users to claim refunds after a failed campaign", async function () {
+  it("allows multiple users to claim refunds after a failed campaign", async function () {
     const firstContributionTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("3") });
     const secondContributionTx = campaign.connect(outsider).contribute({ value: ethers.parseEther("2") });
 
@@ -433,7 +507,7 @@ describe("CrowdfundingCampaign", function () {
     expect(await ethers.provider.getBalance(await campaign.getAddress())).to.equal(0n);
   });
 
-  it("32 should allow multiple users to claim reward tokens after a successful campaign", async function () {
+  it("allows multiple users to claim reward tokens after a successful campaign", async function () {
     const firstContributionTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("6") });
     const secondContributionTx = campaign.connect(outsider).contribute({ value: ethers.parseEther("4") });
 
@@ -451,5 +525,19 @@ describe("CrowdfundingCampaign", function () {
     expect(await token.balanceOf(outsider.address)).to.equal(40n);
     expect(await campaign.rewardClaimed(supporter.address)).to.equal(true);
     expect(await campaign.rewardClaimed(outsider.address)).to.equal(true);
+  });
+
+  it("treats price appreciation as reaching the USD goal", async function () {
+    const contributeTx = campaign.connect(supporter).contribute({ value: ethers.parseEther("9") });
+    await recordTrackedTx("CrowdfundingCampaign", "contribute", contributeTx);
+
+    expect(await campaign.totalRaisedUsd()).to.equal(ethers.parseUnits("18000", 18));
+
+    const updatePriceTx = priceFeed.updateAnswer(APPRECIATED_ETH_USD_PRICE);
+    await recordTrackedTx("MockPriceFeed", "updateAnswer", updatePriceTx);
+    await networkHelpers.time.increaseTo((await campaign.deadline()) + 1n);
+
+    expect(await campaign.totalRaisedUsd()).to.equal(ethers.parseUnits("22500", 18));
+    expect(await campaign.isSuccessful()).to.equal(true);
   });
 });

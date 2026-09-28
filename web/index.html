@@ -11,7 +11,7 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Web3 demo</p>
-          <h1>Crowdfunding scenario</h1>
+          <h1>Crowdfunding</h1>
         </div>
         <button id="connectWalletBtn" class="primary-btn">Connect MetaMask</button>
       </header>
@@ -19,7 +19,10 @@
       <section class="status-grid">
         <div class="stat-card">
           <span class="label">Wallet</span>
-          <strong id="accountStatus">Not connected</strong>
+          <div class="value-row">
+            <strong id="accountStatus">Not connected</strong>
+            <button type="button" class="copy-btn" data-copy-target="accountStatus" aria-label="Copy wallet address">⧉</button>
+          </div>
         </div>
         <div class="stat-card">
           <span class="label">Network</span>
@@ -27,11 +30,17 @@
         </div>
         <div class="stat-card">
           <span class="label">Registry</span>
-          <strong id="registryName">Not deployed</strong>
+          <div class="value-row">
+            <strong id="registryName">Not deployed</strong>
+            <button type="button" class="copy-btn" data-copy-target="registryName" aria-label="Copy registry address">⧉</button>
+          </div>
         </div>
         <div class="stat-card">
           <span class="label">Token</span>
-          <strong id="tokenName">Not deployed</strong>
+          <div class="value-row">
+            <strong id="tokenName">Not deployed</strong>
+            <button type="button" class="copy-btn" data-copy-target="tokenName" aria-label="Copy token address">⧉</button>
+          </div>
         </div>
         <div class="stat-card">
           <span class="label">Campaign</span>
@@ -41,22 +50,109 @@
 
       <main class="layout">
         <section class="panel">
-          <h2>Scenario</h2>
-          <div class="actions">
-            <button id="deployBtn" class="primary-btn">Deploy demo</button>
-            <button id="registerAuthorBtn" class="secondary-btn">Register author</button>
-            <button id="contributeBtn" class="secondary-btn">Contribute 0.5 ETH</button>
-            <button id="withdrawBtn" class="secondary-btn">Withdraw funds</button>
-            <button id="claimRefundBtn" class="secondary-btn">Claim refund</button>
-            <button id="claimRewardBtn" class="secondary-btn">Claim reward</button>
+          <h2>Sepolia flow</h2>
+          <p class="panel-copy">AuthorRegistry and RewardToken are fixed on Sepolia. This app creates and loads campaigns dynamically.</p>
+          <div class="action-tabs" id="actionTabs">
+            <button type="button" class="tab-btn active" data-tab="create-campaign">Create campaign</button>
+            <button type="button" class="tab-btn" data-tab="load-campaign">Load campaign</button>
+            <button type="button" class="tab-btn" data-tab="register-author">Register author</button>
+            <button type="button" class="tab-btn" data-tab="grant-minter-role">Grant MINTER_ROLE</button>
+            <button type="button" class="tab-btn" data-tab="contribute">Contribute</button>
+            <button type="button" class="tab-btn" data-tab="withdraw-funds">Withdraw funds</button>
+            <button type="button" class="tab-btn" data-tab="claim-refund">Claim refund</button>
+            <button type="button" class="tab-btn" data-tab="claim-reward">Claim reward</button>
           </div>
-          <div id="deployStatus" class="message neutral">No scenario deployed yet.</div>
+
+          <div class="tab-panels">
+            <section class="tab-panel active" data-panel="create-campaign">
+              <div class="form-grid">
+                <label>
+                  <span>Campaign title</span>
+                  <input id="campaignNameInput" type="text" value="Launch Campaign" />
+                </label>
+                <label>
+                  <span>Goal (USD)</span>
+                  <input id="campaignGoalInput" type="number" min="1" step="1" value="20000" />
+                  <div id="goalEthEstimate" class="helper-text">Current ETH/USD price: loading…</div>
+                </label>
+                <label>
+                  <span>Duration (seconds)</span>
+                  <input id="campaignDurationInput" type="number" min="60" step="60" value="300" />
+                </label>
+                <label>
+                  <span>Beneficiary</span>
+                  <input id="beneficiaryInput" type="text" placeholder="Defaults to connected wallet" />
+                </label>
+              </div>
+              <button id="createCampaignBtn" class="primary-btn">Create campaign</button>
+            </section>
+
+            <section class="tab-panel" data-panel="load-campaign">
+              <div class="form-grid single-column">
+                <label>
+                  <span>Existing campaign address</span>
+                  <input id="campaignAddressInput" type="text" placeholder="0x..." />
+                </label>
+              </div>
+              <button id="loadCampaignBtn" class="primary-btn">Load campaign</button>
+            </section>
+
+            <section class="tab-panel" data-panel="register-author">
+              <div class="form-grid">
+                <label>
+                  <span>Author name</span>
+                  <input id="authorNameInput" type="text" value="Sepolia Author" />
+                </label>
+                <label>
+                  <span>Address</span>
+                  <input id="authorAddressInput" type="text" placeholder="0x..." />
+                </label>
+              </div>
+              <button id="registerAuthorBtn" class="primary-btn">Register author</button>
+            </section>
+
+            <section class="tab-panel" data-panel="grant-minter-role">
+              <p class="panel-copy">Grant the loaded campaign permission to mint reward tokens. This requires `DEFAULT_ADMIN_ROLE` on RewardToken.</p>
+              <button id="grantMinterRoleBtn" class="primary-btn">Grant MINTER_ROLE</button>
+            </section>
+
+            <section class="tab-panel" data-panel="contribute">
+              <div class="form-grid single-column">
+                <label>
+                  <span>Contribution (ETH)</span>
+                  <input id="contributionInput" type="number" min="0.001" step="0.001" value="0.05" />
+                  <div id="contributionEthEstimate" class="helper-text">Current ETH/USD price: loading…</div>
+                </label>
+              </div>
+              <button id="contributeBtn" class="primary-btn">Contribute</button>
+            </section>
+
+            <section class="tab-panel" data-panel="withdraw-funds">
+              <p class="panel-copy">Withdraw campaign funds to the beneficiary after the deadline if the goal was reached.</p>
+              <button id="withdrawBtn" class="primary-btn">Withdraw funds</button>
+            </section>
+
+            <section class="tab-panel" data-panel="claim-refund">
+              <p class="panel-copy">Claim a refund after the deadline if the campaign did not reach its goal.</p>
+              <button id="claimRefundBtn" class="primary-btn">Claim refund</button>
+            </section>
+
+            <section class="tab-panel" data-panel="claim-reward">
+              <p class="panel-copy">Claim CRWD rewards after a successful campaign. The campaign must already have `MINTER_ROLE`.</p>
+              <button id="claimRewardBtn" class="primary-btn">Claim reward</button>
+            </section>
+          </div>
+          <div id="deployStatus" class="message neutral">Connect MetaMask to work with Sepolia contracts.</div>
         </section>
 
         <section class="panel">
           <h2>Contract state</h2>
           <dl class="details-list">
             <div><dt>Author registered</dt><dd id="authorRegistered">—</dd></div>
+            <div><dt>Registry manager</dt><dd id="registryManagerValue">—</dd></div>
+            <div><dt>Token admin</dt><dd id="tokenAdminValue">—</dd></div>
+            <div><dt>Campaign can mint</dt><dd id="campaignMinterValue">—</dd></div>
+            <div><dt>Campaign address</dt><dd class="copyable-value"><span id="campaignAddressValue">—</span><button type="button" class="copy-btn small-copy" data-copy-target="campaignAddressValue" aria-label="Copy campaign address">⧉</button></dd></div>
             <div><dt>Goal</dt><dd id="goalValue">—</dd></div>
             <div><dt>Raised</dt><dd id="raisedValue">—</dd></div>
             <div><dt>Deadline</dt><dd id="deadlineValue">—</dd></div>
