@@ -12,6 +12,10 @@ export function shortAddress(address) {
 export function resetCampaignUi(text = "No campaign selected") {
   elements.campaignTitle.textContent = text;
   elements.campaignAddressValue.textContent = "—";
+  elements.campaignCategoryValue.textContent = "—";
+  elements.campaignDescriptionValue.textContent = "—";
+  elements.campaignImagePreview.hidden = true;
+  elements.campaignImagePreview.removeAttribute("src");
   elements.campaignMinterValue.textContent = "—";
   elements.goalValue.textContent = "—";
   elements.raisedValue.textContent = "—";

@@ -16,6 +16,12 @@ ETHERSCAN_API_KEY=...
 npm run build
 ```
 
+## Test contracts with coverage
+
+```bash
+npx hardhat test --coverage
+```
+
 ## Deploy command
 
 ```bash

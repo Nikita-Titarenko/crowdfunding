@@ -44,7 +44,10 @@
         </div>
         <div class="stat-card">
           <span class="label">Campaign</span>
-          <strong id="campaignTitle">Not deployed</strong>
+          <div class="value-row campaign-header-row">
+            <button type="button" id="clearSavedCampaignBtn" class="secondary-btn small-inline-btn">Clear</button>
+            <strong id="campaignTitle">Not deployed</strong>
+          </div>
         </div>
       </section>
 
@@ -75,6 +78,22 @@
                   <input id="campaignGoalInput" type="number" min="1" step="1" value="20000" />
                   <div id="goalEthEstimate" class="helper-text">Current ETH/USD price: loading…</div>
                 </label>
+
+                <label class="full-width">
+                  <span>Description</span>
+                  <textarea id="campaignDescriptionInput" rows="3" placeholder="Describe the campaign and the impact it will create."></textarea>
+                </label>
+
+                <label>
+                  <span>Image URL</span>
+                  <input id="campaignImageInput" type="url" placeholder="https://example.com/image.png" />
+                </label>
+
+                <label>
+                  <span>Category</span>
+                  <input id="campaignCategoryInput" type="text" placeholder="art, charity, education, tech..." />
+                </label>
+
                 <label>
                   <span>Duration (seconds)</span>
                   <input id="campaignDurationInput" type="number" min="60" step="60" value="300" />
@@ -153,6 +172,9 @@
             <div><dt>Token admin</dt><dd id="tokenAdminValue">—</dd></div>
             <div><dt>Campaign can mint</dt><dd id="campaignMinterValue">—</dd></div>
             <div><dt>Campaign address</dt><dd class="copyable-value"><span id="campaignAddressValue">—</span><button type="button" class="copy-btn small-copy" data-copy-target="campaignAddressValue" aria-label="Copy campaign address">⧉</button></dd></div>
+            <div><dt>Category</dt><dd id="campaignCategoryValue">—</dd></div>
+            <div><dt>Description</dt><dd id="campaignDescriptionValue" class="multiline-value">—</dd></div>
+            <div><dt>Image</dt><dd id="campaignImageValue" class="metadata-image-cell"><img id="campaignImagePreview" alt="Campaign image" hidden /></dd></div>
             <div><dt>Goal</dt><dd id="goalValue">—</dd></div>
             <div><dt>Raised</dt><dd id="raisedValue">—</dd></div>
             <div><dt>Deadline</dt><dd id="deadlineValue">—</dd></div>

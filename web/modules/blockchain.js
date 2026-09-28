@@ -40,7 +40,57 @@ export async function loadArtifacts() {
   return appState.artifacts;
 }
 
-async function verifyCampaignDeployment({ address, title, goalUsd, duration, beneficiary }) {
+async function pinCampaignMetadata(metadata) {
+  const response = await fetch("/api/pin-campaign-metadata", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(metadata),
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error || "Uploading campaign metadata to IPFS failed.");
+  }
+
+  return payload.cid;
+}
+
+function buildPinataGatewayUrl(metadataCid) {
+  if (!metadataCid) {
+    return null;
+  }
+
+  if (metadataCid.startsWith("http://") || metadataCid.startsWith("https://")) {
+    return metadataCid;
+  }
+
+  const cleanCid = metadataCid.replace(/^ipfs:\/\//i, "");
+  return `https://gateway.pinata.cloud/ipfs/${cleanCid}`;
+}
+
+async function fetchCampaignMetadata(metadataCid) {
+  const gatewayUrl = buildPinataGatewayUrl(metadataCid);
+  if (!gatewayUrl) {
+    return null;
+  }
+
+  const response = await fetch(gatewayUrl, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Unable to load campaign metadata from IPFS.`);
+  }
+
+  const metadata = await response.json().catch(() => null);
+  if (!metadata) {
+    return null;
+  }
+
+  return metadata;
+}
+
+async function verifyCampaignDeployment({ address, metadataCid, goalUsd, duration, beneficiary, metadataUri }) {
   const response = await fetch("/api/verify-campaign", {
     method: "POST",
     headers: {
@@ -51,10 +101,11 @@ async function verifyCampaignDeployment({ address, title, goalUsd, duration, ben
       registry: requiredNetwork.contracts.registry,
       token: requiredNetwork.contracts.token,
       priceFeed: requiredNetwork.contracts.priceFeed,
-      title,
+      metadataCid,
       goalUsd,
       duration,
       beneficiary,
+      metadataUri,
       contract: "contracts/contracts/CrowdfundingCampaign.sol:CrowdfundingCampaign",
     }),
   });
@@ -188,11 +239,11 @@ export async function loadCampaign(campaignAddress, announce = true) {
   const normalized = ethers.getAddress(campaignAddress);
   const campaign = new ethers.Contract(normalized, artifacts.campaign.abi, appState.signer);
 
-  const [registryAddress, tokenAddress, priceFeedAddress, title] = await Promise.all([
+  const [registryAddress, tokenAddress, priceFeedAddress, metadataCid] = await Promise.all([
     campaign.authorRegistry(),
     campaign.rewardToken(),
     campaign.priceFeed(),
-    campaign.title(),
+    campaign.metadataCid(),
   ]);
 
   if (
@@ -206,7 +257,16 @@ export async function loadCampaign(campaignAddress, announce = true) {
   appState.campaign = campaign;
   localStorage.setItem(STORAGE_KEY, normalized);
   elements.campaignAddressInput.value = normalized;
-  elements.campaignTitle.textContent = title;
+
+  let displayTitle = "IPFS metadata CID";
+  try {
+    const metadata = await fetchCampaignMetadata(metadataCid);
+    displayTitle = metadata?.name || metadata?.title || metadataCid || displayTitle;
+  } catch {
+    displayTitle = metadataCid || displayTitle;
+  }
+
+  elements.campaignTitle.textContent = displayTitle;
   elements.campaignAddressValue.textContent = shortAddress(normalized);
   elements.campaignAddressValue.dataset.fullValue = normalized;
 
@@ -222,6 +282,9 @@ export async function createCampaign() {
   await connectCoreContracts();
 
   const title = elements.campaignNameInput.value.trim();
+  const description = elements.campaignDescriptionInput.value.trim();
+  const image = elements.campaignImageInput.value.trim();
+  const category = elements.campaignCategoryInput.value.trim();
   const goalUsdInput = elements.campaignGoalInput.value.trim();
   const durationRaw = elements.campaignDurationInput.value.trim();
   const beneficiaryInput = elements.beneficiaryInput.value.trim();
@@ -229,6 +292,10 @@ export async function createCampaign() {
 
   if (!title) {
     throw new Error("Enter a campaign title.");
+  }
+
+  if (!description) {
+    throw new Error("Enter a campaign description.");
   }
 
   if (!goalUsdInput || Number(goalUsdInput) <= 0) {
@@ -242,6 +309,16 @@ export async function createCampaign() {
   if (!ethers.isAddress(beneficiary)) {
     throw new Error("Beneficiary address is invalid.");
   }
+
+  const metadataCid = await pinCampaignMetadata({
+    title,
+    description,
+    image,
+    category: category || "general",
+    createdBy: appState.account,
+  });
+
+  localStorage.setItem("campaignMetadataCid", metadataCid);
 
   const goalUsd = ethers.parseUnits(goalUsdInput, 18);
 
@@ -261,7 +338,7 @@ export async function createCampaign() {
     requiredNetwork.contracts.registry,
     requiredNetwork.contracts.token,
     requiredNetwork.contracts.priceFeed,
-    title,
+    metadataCid,
     goalUsd,
     BigInt(durationRaw),
     beneficiary,
@@ -277,10 +354,11 @@ export async function createCampaign() {
   try {
     await verifyCampaignDeployment({
       address: campaignAddress,
-      title,
+      metadataCid,
       goalUsd: goalUsd.toString(),
       duration: durationRaw,
       beneficiary,
+      metadataUri: `https://gateway.pinata.cloud/ipfs/${metadataCid}`,
     });
     addTxEntry("Verify campaign", "confirmed", campaignAddress, "Campaign verified on Etherscan");
   } catch (error) {
@@ -426,7 +504,7 @@ export async function refreshContractState() {
 
   const campaignAddress = await appState.campaign.getAddress();
   const minterRole = await appState.token.MINTER_ROLE();
-  const [goalUsd, raised, raisedUsd, deadline, finalized, successful, contribution, contributionUsd, title, hasMinterRole] = await Promise.all([
+  const [goalUsd, raised, raisedUsd, deadline, finalized, successful, contribution, contributionUsd, metadataCid, hasMinterRole] = await Promise.all([
     appState.campaign.goalUsd(),
     appState.campaign.totalRaised(),
     appState.campaign.totalRaisedUsd(),
@@ -435,14 +513,32 @@ export async function refreshContractState() {
     appState.campaign.isSuccessful(),
     appState.campaign.contributions(appState.account),
     appState.campaign.contributionUsd(appState.account),
-    appState.campaign.title(),
+    appState.campaign.metadataCid(),
     appState.token.hasRole(minterRole, campaignAddress),
   ]);
 
   appState.roles.campaignHasMinterRole = hasMinterRole;
 
-  elements.campaignTitle.textContent = title;
+  let displayTitle = metadataCid || "IPFS metadata CID";
+  let metadata = null;
+  try {
+    metadata = await fetchCampaignMetadata(metadataCid);
+    displayTitle = metadata?.name || metadata?.title || metadataCid || displayTitle;
+  } catch {
+    displayTitle = metadataCid || displayTitle;
+  }
+
+  elements.campaignTitle.textContent = displayTitle;
   elements.campaignAddressValue.textContent = shortAddress(campaignAddress);
+  elements.campaignCategoryValue.textContent = metadata?.category || "—";
+  elements.campaignDescriptionValue.textContent = metadata?.description || "—";
+  if (metadata?.image) {
+    elements.campaignImagePreview.src = metadata.image;
+    elements.campaignImagePreview.hidden = false;
+  } else {
+    elements.campaignImagePreview.hidden = true;
+    elements.campaignImagePreview.removeAttribute("src");
+  }
   elements.campaignAddressValue.dataset.fullValue = campaignAddress;
   elements.campaignMinterValue.textContent = hasMinterRole ? "Yes" : "No";
   elements.goalValue.textContent = `${ethers.formatUnits(goalUsd, 18)} USD`;

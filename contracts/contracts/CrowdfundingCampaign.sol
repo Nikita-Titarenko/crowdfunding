@@ -16,7 +16,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
 
     address public immutable author;
     address public immutable beneficiary;
-    string public title;
+    string public metadataCid;
     uint256 public immutable goalUsd;
     uint256 public immutable deadline;
     uint256 public totalRaised;
@@ -49,7 +49,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
         address indexed registry,
         address indexed token,
         address priceFeed,
-        string title,
+        string metadataCid,
         uint256 goalUsd,
         uint256 deadline
     );
@@ -62,7 +62,7 @@ contract CrowdfundingCampaign is ReentrancyGuard {
         address registry,
         address token,
         address ethUsdPriceFeed,
-        string memory campaignTitle,
+        string memory campaignMetadataCid,
         uint256 campaignGoalUsd,
         uint256 duration,
         address campaignBeneficiary
@@ -83,11 +83,11 @@ contract CrowdfundingCampaign is ReentrancyGuard {
         rewardToken = IRewardToken(token);
         author = msg.sender;
         beneficiary = campaignBeneficiary;
-        title = campaignTitle;
+        metadataCid = campaignMetadataCid;
         goalUsd = campaignGoalUsd;
         deadline = block.timestamp + duration;
 
-        emit CampaignCreated(msg.sender, registry, token, ethUsdPriceFeed, campaignTitle, campaignGoalUsd, deadline);
+        emit CampaignCreated(msg.sender, registry, token, ethUsdPriceFeed, campaignMetadataCid, campaignGoalUsd, deadline);
     }
 
     /// @notice Contributes ETH to the campaign before the deadline.

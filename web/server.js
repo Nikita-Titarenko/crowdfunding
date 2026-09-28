@@ -86,6 +86,77 @@ function readJsonBody(req) {
   });
 }
 
+async function handlePinCampaignMetadata(req, res) {
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: false, error: "Request body must be valid JSON." }));
+    return;
+  }
+
+  if (!payload?.title || !payload?.description) {
+    res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: false, error: "Campaign title and description are required." }));
+    return;
+  }
+
+  const pinataApiKey = process.env.PINATA_API_KEY;
+  const pinataSecret = process.env.PINATA_SECRET_API_KEY;
+
+  if (!pinataApiKey || !pinataSecret) {
+    res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: false, error: "PINATA_API_KEY and PINATA_SECRET_API_KEY must be set." }));
+    return;
+  }
+
+  try {
+    const body = JSON.stringify({
+      pinataOptions: {
+        cidVersion: 1,
+      },
+      pinataMetadata: {
+        name: `${payload.title}.json`,
+      },
+      pinataContent: {
+        name: payload.title,
+        description: payload.description,
+        image: payload.image || "",
+        category: payload.category || "general",
+        createdBy: payload.createdBy || "",
+      },
+    });
+
+    const pinResponse = await fetch("https://api.pinata.cloud/pinning/pinJSONToIPFS", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "pinata_api_key": pinataApiKey,
+        "pinata_secret_api_key": pinataSecret,
+      },
+      body,
+    });
+
+    const pinData = await pinResponse.json().catch(() => null);
+
+    if (!pinResponse.ok || !pinData?.IpfsHash) {
+      throw new Error(pinData?.error?.details || pinData?.message || "Pinata upload failed.");
+    }
+
+    const cid = pinData.IpfsHash;
+    const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${cid}`;
+
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: true, cid, ipfsUrl }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Pinata error";
+    res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ ok: false, error: message }));
+  }
+}
+
 async function handleVerifyCampaign(req, res) {
   if (!process.env.ETHERSCAN_API_KEY) {
     res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
@@ -103,8 +174,8 @@ async function handleVerifyCampaign(req, res) {
     return;
   }
 
-  const requiredFields = ["address", "registry", "token", "priceFeed", "title", "goalUsd", "duration", "beneficiary"];
-  const missingField = requiredFields.find((field) => !payload?.[field]);
+  const requiredFields = ["address", "registry", "token", "priceFeed", "metadataCid", "goalUsd", "duration", "beneficiary"];
+  const missingField = requiredFields.find((field) => !payload?.[field] && !(field === "metadataCid" && payload?.title));
 
   if (missingField) {
     res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
@@ -128,10 +199,12 @@ async function handleVerifyCampaign(req, res) {
     VERIFICATION_REGISTRY: payload.registry,
     VERIFICATION_TOKEN: payload.token,
     VERIFICATION_PRICE_FEED: payload.priceFeed,
-    VERIFICATION_TITLE: payload.title,
+    VERIFICATION_METADATA_CID: payload.metadataCid || payload.title,
+    VERIFICATION_TITLE: payload.title || payload.metadataCid,
     VERIFICATION_GOAL_USD: String(payload.goalUsd),
     VERIFICATION_DURATION: String(payload.duration),
     VERIFICATION_BENEFICIARY: payload.beneficiary,
+    VERIFICATION_METADATA_URI: payload.metadataUri || "",
   };
 
   try {
@@ -147,6 +220,11 @@ async function handleVerifyCampaign(req, res) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
+
+  if (req.method === "POST" && url.pathname === "/api/pin-campaign-metadata") {
+    await handlePinCampaignMetadata(req, res);
+    return;
+  }
 
   if (req.method === "POST" && url.pathname === "/api/verify-campaign") {
     await handleVerifyCampaign(req, res);

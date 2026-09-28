@@ -77,6 +77,15 @@ async function handleLoadCampaign() {
   }
 }
 
+async function handleClearSavedCampaign() {
+  localStorage.removeItem("crowdfunding:lastCampaignAddress");
+  appState.campaign = null;
+  elements.campaignAddressInput.value = "";
+  resetCampaignUi("No campaign selected");
+  setMessage("Saved campaign reference was cleared from localStorage.", "success");
+  await refreshContractState();
+}
+
 async function handleRegisterAuthor() {
   const authorName = elements.authorNameInput.value.trim();
   const authorAddressInput = elements.authorAddressInput.value.trim();
@@ -184,6 +193,7 @@ export function initializeApp() {
   bindButton("connectWalletBtn", handleConnectWallet);
   bindButton("createCampaignBtn", handleCreateCampaign);
   bindButton("loadCampaignBtn", handleLoadCampaign);
+  bindButton("clearSavedCampaignBtn", handleClearSavedCampaign);
   bindButton("registerAuthorBtn", handleRegisterAuthor);
   bindButton("grantMinterRoleBtn", handleGrantMinterRole);
   bindButton("contributeBtn", handleContribute);

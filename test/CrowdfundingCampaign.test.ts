@@ -40,7 +40,7 @@ describe("CrowdfundingCampaign", function () {
         await registry.getAddress(),
         await token.getAddress(),
         await priceFeed.getAddress(),
-        "Launch Campaign",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         GOAL_USD,
         duration,
         beneficiary.address,
@@ -66,7 +66,7 @@ describe("CrowdfundingCampaign", function () {
         ethers.ZeroAddress,
         await token.getAddress(),
         await priceFeed.getAddress(),
-        "Bad",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         GOAL_USD,
         30n,
         beneficiary.address,
@@ -82,7 +82,7 @@ describe("CrowdfundingCampaign", function () {
         await registry.getAddress(),
         ethers.ZeroAddress,
         await priceFeed.getAddress(),
-        "Bad",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         GOAL_USD,
         30n,
         beneficiary.address,
@@ -98,7 +98,7 @@ describe("CrowdfundingCampaign", function () {
         await registry.getAddress(),
         await token.getAddress(),
         ethers.ZeroAddress,
-        "Bad",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         GOAL_USD,
         30n,
         beneficiary.address,
@@ -114,7 +114,7 @@ describe("CrowdfundingCampaign", function () {
         await registry.getAddress(),
         await token.getAddress(),
         await priceFeed.getAddress(),
-        "Bad",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         GOAL_USD,
         30n,
         ethers.ZeroAddress,
@@ -130,7 +130,7 @@ describe("CrowdfundingCampaign", function () {
         await registry.getAddress(),
         await token.getAddress(),
         await priceFeed.getAddress(),
-        "Bad",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         0n,
         30n,
         beneficiary.address,
@@ -147,7 +147,7 @@ describe("CrowdfundingCampaign", function () {
         await noAuthorRegistry.getAddress(),
         await token.getAddress(),
         await priceFeed.getAddress(),
-        "Bad",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         GOAL_USD,
         30n,
         beneficiary.address,
@@ -163,7 +163,7 @@ describe("CrowdfundingCampaign", function () {
         await registry.getAddress(),
         await token.getAddress(),
         await priceFeed.getAddress(),
-        "Campaign Two",
+        "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y",
         ethers.parseUnits("24000", 18),
         45n,
         beneficiary.address,
@@ -173,7 +173,7 @@ describe("CrowdfundingCampaign", function () {
     const grantRoleTx = token.grantRole(await token.MINTER_ROLE(), await campaign2.getAddress());
     await recordTrackedTx("RewardToken", "grantRole", grantRoleTx);
 
-    expect(await campaign2.title()).to.equal("Campaign Two");
+    expect(await campaign2.metadataCid()).to.equal("bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbz6y");
     expect(await campaign2.goalUsd()).to.equal(ethers.parseUnits("24000", 18));
     expect(await campaign2.deadline()).to.be.greaterThan(0n);
     expect(await campaign2.beneficiary()).to.equal(beneficiary.address);
@@ -388,10 +388,10 @@ describe("CrowdfundingCampaign", function () {
 
     await expect(claimRewardTx)
       .to.emit(campaign, "RewardClaimed")
-      .withArgs(supporter.address, 100n);
+      .withArgs(supporter.address, ethers.parseUnits("100", 18));
     await trackGasUsage("CrowdfundingCampaign", "claimReward", claimRewardTx);
 
-    expect(await token.balanceOf(supporter.address)).to.equal(100n);
+    expect(await token.balanceOf(supporter.address)).to.equal(ethers.parseUnits("100", 18));
   });
 
   it("mints proportional fractional rewards for small ETH contributions", async function () {
@@ -521,8 +521,8 @@ describe("CrowdfundingCampaign", function () {
     await recordTrackedTx("CrowdfundingCampaign", "claimReward", rewardFromSupporterTx);
     await recordTrackedTx("CrowdfundingCampaign", "claimReward", rewardFromOutsiderTx);
 
-    expect(await token.balanceOf(supporter.address)).to.equal(60n);
-    expect(await token.balanceOf(outsider.address)).to.equal(40n);
+    expect(await token.balanceOf(supporter.address)).to.equal(ethers.parseUnits("60", 18));
+    expect(await token.balanceOf(outsider.address)).to.equal(ethers.parseUnits("40", 18));
     expect(await campaign.rewardClaimed(supporter.address)).to.equal(true);
     expect(await campaign.rewardClaimed(outsider.address)).to.equal(true);
   });
